@@ -22,6 +22,7 @@ class WP_Notes_Admin {
 		add_action('admin_bar_menu', array($this, 'register_admin_bar'), 100);
 		add_action('admin_enqueue_scripts', array($this, 'enqueue_assets'));
 		add_action('admin_footer', array($this, 'render_modal_root'));
+		add_action('admin_post_wp_notes_export_html', array($this, 'handle_export_html'));
 		add_action('admin_post_wp_notes_save_note', array($this, 'handle_save_note'));
 		add_action('admin_post_wp_notes_delete_note', array($this, 'handle_delete_note'));
 		add_action('wp_ajax_wp_notes_get_note_form', array($this, 'handle_get_note_form'));
@@ -320,8 +321,33 @@ class WP_Notes_Admin {
 		echo '<li>' . esc_html($this->i18n->t('settings_about_feature_4')) . '</li>';
 		echo '</ul>';
 		echo '</section>';
+		echo '<section class="wp-notes-settings-readme" aria-labelledby="wp-notes-export-tools-title">';
+		echo '<h2 id="wp-notes-export-tools-title" class="wp-notes-settings-readme__title">' . esc_html($this->i18n->t('export_tools_title')) . '</h2>';
+		echo '<p class="wp-notes-settings-readme__intro">' . esc_html($this->i18n->t('export_tools_intro')) . '</p>';
+		echo '<p>';
+		echo '<a class="button button-primary" href="' . esc_url($this->get_export_download_url()) . '">' . esc_html($this->i18n->t('export_download_button')) . '</a>';
+		echo '</p>';
+		echo '</section>';
 		echo '<div class="wp-notes-settings-footer"><div class="wp-notes-settings-footer__version">' . esc_html($this->i18n->t('version') . ': ' . $plugin_data['Version']) . '</div><div class="wp-notes-settings-footer__promo"><img class="wp-notes-settings-footer__logo" src="' . esc_url(WP_NOTES_URL . 'assets/img/Relevant.svg') . '" alt="Relevant"></div></div>';
 		echo '</div>';
+	}
+
+	public function handle_export_html() {
+		if (! current_user_can('manage_options')) {
+			wp_die(esc_html($this->i18n->t('visibility_denied')));
+		}
+
+		check_admin_referer('wp_notes_export_html');
+
+		$notes    = $this->get_exportable_notes();
+		$filename = 'wp-notes-export-' . gmdate('Y-m-d') . '.html';
+
+		nocache_headers();
+		header('Content-Type: text/html; charset=' . get_option('blog_charset'));
+		header('Content-Disposition: attachment; filename="' . $filename . '"');
+
+		echo $this->get_export_document($notes);
+		exit;
 	}
 
 	public function render_note_form_page() {
@@ -596,6 +622,142 @@ class WP_Notes_Admin {
 		if ($message) {
 			echo '<div class="notice notice-success is-dismissible wp-notes-notice"><p>' . esc_html($message) . '</p></div>';
 		}
+	}
+
+	private function get_export_download_url() {
+		return wp_nonce_url(
+			add_query_arg(array('action' => 'wp_notes_export_html'), admin_url('admin-post.php')),
+			'wp_notes_export_html'
+		);
+	}
+
+	private function get_exportable_notes() {
+		$notes = $this->repository->get_all();
+
+		return array_values(array_filter($notes, array($this, 'filter_visible_note')));
+	}
+
+	private function get_export_document($notes) {
+		$charset = get_option('blog_charset');
+
+		return '<!doctype html><html lang="' . esc_attr(get_locale()) . '"><head><meta charset="' . esc_attr($charset) . '"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' . esc_html(get_bloginfo('name') . ' - ' . $this->i18n->t('export_document_title')) . '</title><style>' . $this->get_export_styles() . '</style></head><body>' . $this->get_export_document_markup($notes) . '</body></html>';
+	}
+
+	private function get_export_document_markup($notes) {
+		$title        = get_bloginfo('name');
+		$generated_at = current_time('mysql');
+		$count        = count($notes);
+
+		ob_start();
+		echo '<div class="wp-notes-export">';
+		echo '<header class="wp-notes-export__header">';
+		echo '<p class="wp-notes-export__eyebrow">' . esc_html($this->i18n->t('menu_root')) . '</p>';
+		echo '<h1 class="wp-notes-export__title">' . esc_html($title) . '</h1>';
+		echo '<p class="wp-notes-export__summary">' . esc_html($this->i18n->t('export_generated_at')) . ': ' . esc_html(mysql2date('Y-m-d H:i', $generated_at)) . '</p>';
+		echo '<p class="wp-notes-export__summary">' . esc_html($this->i18n->t('export_total_notes')) . ': ' . esc_html((string) $count) . '</p>';
+		echo '</header>';
+
+		if (empty($notes)) {
+			echo '<section class="wp-notes-export__empty"><p>' . esc_html($this->i18n->t('no_notes')) . '</p></section>';
+		} else {
+			foreach ($notes as $note) {
+				echo $this->get_export_note_html($note);
+			}
+		}
+
+		echo '</div>';
+		return ob_get_clean();
+	}
+
+	private function get_export_note_html($note) {
+		$scope_label = 'global' === $note['scope'] ? $this->i18n->t('scope_global') : $this->i18n->t('scope_screen');
+		$side_label  = $this->resolve_note_side_label($note);
+		$content     = $this->inline_export_images(self::sanitize_note_content($note['content']));
+
+		ob_start();
+		echo '<article class="wp-notes-export-note">';
+		echo '<header class="wp-notes-export-note__header">';
+		echo '<div>';
+		echo '<p class="wp-notes-export-note__scope">' . esc_html($scope_label) . '</p>';
+		echo '<h2 class="wp-notes-export-note__title">' . esc_html($side_label) . '</h2>';
+		echo '</div>';
+		echo '<div class="wp-notes-export-note__meta">';
+		echo '<p><strong>' . esc_html($this->i18n->t('column_author')) . ':</strong> ' . esc_html($this->user_label($note['author_id'])) . '</p>';
+		echo '<p><strong>' . esc_html($this->i18n->t('column_updated')) . ':</strong> ' . esc_html(mysql2date('Y-m-d H:i', $note['updated_at'])) . '</p>';
+		echo '<p><strong>' . esc_html($this->i18n->t('form_edit_access')) . ':</strong> ' . esc_html($this->access_label($note['edit_mode'])) . '</p>';
+		if (! empty($note['page_url'])) {
+			echo '<p><strong>' . esc_html($this->i18n->t('form_page_url')) . ':</strong> <a href="' . esc_url($note['page_url']) . '">' . esc_html($note['page_url']) . '</a></p>';
+		}
+		echo '</div>';
+		echo '</header>';
+		echo '<div class="wp-notes-export-note__content">' . $content . '</div>';
+		echo '</article>';
+
+		return ob_get_clean();
+	}
+
+	private function inline_export_images($content) {
+		if ('' === (string) $content || false === strpos((string) $content, '<img')) {
+			return (string) $content;
+		}
+
+		return preg_replace_callback(
+			'/<img\b[^>]*\bsrc=(["\'])(.*?)\1/i',
+			array($this, 'replace_export_image_source'),
+			(string) $content
+		);
+	}
+
+	private function replace_export_image_source($matches) {
+		$quote = isset($matches[1]) ? $matches[1] : '"';
+		$src   = isset($matches[2]) ? esc_url_raw(html_entity_decode((string) $matches[2])) : '';
+
+		if ('' === $src) {
+			return $matches[0];
+		}
+
+		$data_uri = $this->build_export_image_data_uri($src);
+		if ('' === $data_uri) {
+			return $matches[0];
+		}
+
+		return str_replace('src=' . $quote . $matches[2] . $quote, 'src=' . $quote . esc_attr($data_uri) . $quote, $matches[0]);
+	}
+
+	private function build_export_image_data_uri($src) {
+		$storage_url  = WP_Notes_Plugin::storage_url();
+		$storage_host = (string) wp_parse_url($storage_url, PHP_URL_HOST);
+		$storage_path = untrailingslashit((string) wp_parse_url($storage_url, PHP_URL_PATH));
+		$src_host     = (string) wp_parse_url($src, PHP_URL_HOST);
+		$src_path     = (string) wp_parse_url($src, PHP_URL_PATH);
+
+		if ('' === $src_path || $src_host !== $storage_host || 0 !== strpos($src_path, $storage_path . '/')) {
+			return '';
+		}
+
+		$filename = wp_basename(rawurldecode($src_path));
+		if ('' === $filename) {
+			return '';
+		}
+
+		$file_path = WP_Notes_Plugin::storage_path() . $filename;
+		if (! file_exists($file_path) || ! is_readable($file_path)) {
+			return '';
+		}
+
+		$filetype = wp_check_filetype($filename);
+		$mime     = ! empty($filetype['type']) ? $filetype['type'] : 'application/octet-stream';
+		$content  = file_get_contents($file_path);
+
+		if (false === $content) {
+			return '';
+		}
+
+		return 'data:' . $mime . ';base64,' . base64_encode($content);
+	}
+
+	private function get_export_styles() {
+		return 'body{margin:0;padding:32px;background:#f3f0e8;color:#1f1c18;font:16px/1.6 "Segoe UI",Arial,sans-serif}a{color:#704f1e}img{max-width:100%;height:auto}pre{overflow:auto;padding:16px;background:#1f2430;color:#f5f5f5;border-radius:12px}code{font-family:Consolas,"Courier New",monospace}blockquote{margin:0;padding:16px 20px;border-left:4px solid #c9a66b;background:#fffaf0}.wp-notes-export{max-width:960px;margin:0 auto}.wp-notes-export__header{margin-bottom:32px;padding:28px 32px;border-radius:24px;background:linear-gradient(135deg,#fff6df,#f3e2b7);box-shadow:0 16px 40px rgba(88,63,18,.12)}.wp-notes-export__eyebrow{margin:0 0 8px;text-transform:uppercase;letter-spacing:.08em;font:700 12px/1.2 "Segoe UI",Arial,sans-serif;color:#7a5a24}.wp-notes-export__title{margin:0 0 12px;font-size:40px;line-height:1.1}.wp-notes-export__summary{margin:4px 0;color:#5b5145}.wp-notes-export__empty,.wp-notes-export-note{margin-bottom:24px;padding:24px 28px;border:1px solid #e4d7bd;border-radius:20px;background:#fffdf8;box-shadow:0 12px 28px rgba(53,40,18,.06)}.wp-notes-export-note__header{display:flex;justify-content:space-between;gap:24px;margin-bottom:20px;padding-bottom:18px;border-bottom:1px solid #eee0c7}.wp-notes-export-note__scope{margin:0 0 6px;font:700 12px/1.2 "Segoe UI",Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#8a6a33}.wp-notes-export-note__title{margin:0;font-size:28px;line-height:1.2}.wp-notes-export-note__meta p{margin:0 0 8px;font-size:14px;color:#5b5145}.wp-notes-export-note__content>*:first-child{margin-top:0}.wp-notes-export-note__content>*:last-child{margin-bottom:0}@media print{body{background:#fff;padding:0}.wp-notes-export__header,.wp-notes-export-note{box-shadow:none;border-color:#d8d8d8}.wp-notes-export-note{break-inside:avoid}}@media (max-width:700px){body{padding:16px}.wp-notes-export__header,.wp-notes-export-note{padding:20px}.wp-notes-export-note__header{display:block}.wp-notes-export-note__title{font-size:24px}}';
 	}
 
 	private function get_note_form_state($request) {

@@ -3,7 +3,7 @@
  * Plugin Name: WP Notes
  * Plugin URI: https://example.com/
  * Description: Admin notes for WordPress screens with per-note permissions and plugin-managed uploads.
- * Version: 2.0.20
+ * Version: 3.0.0
  * Author: Relevant AS (Andrii Boiko)
  * Author URI: https://relevant.no/
  * Text Domain: wp-notes
@@ -13,7 +13,7 @@ if (! defined('ABSPATH')) {
 	exit;
 }
 
-define('WP_NOTES_VERSION', '2.0.20');
+define('WP_NOTES_VERSION', '3.0.0');
 define('WP_NOTES_FILE', __FILE__);
 define('WP_NOTES_PATH', plugin_dir_path(__FILE__));
 define('WP_NOTES_URL', plugin_dir_url(__FILE__));
