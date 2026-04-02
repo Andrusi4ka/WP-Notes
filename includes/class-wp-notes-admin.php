@@ -104,6 +104,60 @@ class WP_Notes_Admin {
 		return 'wp-notes-theme--' . self::normalize_note_theme($theme);
 	}
 
+	private function can_create_screen_note_for_current_screen() {
+		if (! function_exists('get_current_screen')) {
+			return false;
+		}
+
+		$screen = get_current_screen();
+		if (! $screen) {
+			return false;
+		}
+
+		return 'post' === $screen->base && 'page' === $screen->post_type;
+	}
+
+	private function can_create_screen_note_for_request($screen_id, $page_url = '') {
+		$screen_id = (string) $screen_id;
+		$page_url  = (string) $page_url;
+
+		if ($this->can_create_screen_note_for_current_screen()) {
+			$current_screen_id = WP_Notes_Context::current_screen_id();
+			$current_page_url  = WP_Notes_Context::current_admin_url();
+
+			if ($screen_id === $current_screen_id || ('' !== $page_url && $page_url === $current_page_url)) {
+				return true;
+			}
+		}
+
+		if ('' !== $screen_id && 0 === strpos($screen_id, 'page')) {
+			return true;
+		}
+
+		if ('' !== $page_url) {
+			$query = wp_parse_url($page_url, PHP_URL_QUERY);
+			if (is_string($query)) {
+				parse_str($query, $params);
+				$post_id = 0;
+
+				foreach (array('post', 'post_ID') as $key) {
+					if (! empty($params[$key])) {
+						$post_id = absint($params[$key]);
+						if ($post_id > 0) {
+							break;
+						}
+					}
+				}
+
+				if ($post_id > 0) {
+					return 'page' === get_post_type($post_id);
+				}
+			}
+		}
+
+		return false;
+	}
+
 	public function register_menu() {
 		$capability = 'edit_pages';
 		add_menu_page($this->i18n->t('menu_root'), $this->i18n->t('menu_root'), $capability, 'wp-notes', array($this, 'render_all_notes_page'), 'dashicons-welcome-write-blog', 58);
@@ -166,6 +220,7 @@ class WP_Notes_Admin {
 		$screen_key    = WP_Notes_Context::current_screen_id();
 		$page_exists   = $this->repository->exists('screen', $screen_key, $current_url);
 		$global_exists = $this->repository->exists('global');
+		$page_allowed  = $this->can_create_screen_note_for_current_screen();
 
 		$admin_bar->add_node(array('id' => 'wp-notes-root', 'title' => $this->i18n->t('admin_bar_root')));
 
@@ -180,13 +235,13 @@ class WP_Notes_Admin {
 		$page_args = array(
 			'id'     => 'wp-notes-page',
 			'parent' => 'wp-notes-root',
-			'title'  => $page_exists ? $this->i18n->t('note_exists') : $this->i18n->t('admin_bar_page'),
+			'title'  => $page_allowed ? ($page_exists ? $this->i18n->t('note_exists') : $this->i18n->t('admin_bar_page')) : $this->i18n->t('admin_bar_page_unavailable'),
 			'meta'   => array(
-				'class'      => $page_exists ? 'wp-notes-admin-bar__item is-disabled' : 'wp-notes-admin-bar__item',
-				'data-modal' => $page_exists ? '0' : '1',
+				'class'      => (! $page_allowed || $page_exists) ? 'wp-notes-admin-bar__item is-disabled' : 'wp-notes-admin-bar__item',
+				'data-modal' => (! $page_allowed || $page_exists) ? '0' : '1',
 			),
 		);
-		if (! $page_exists) {
+		if ($page_allowed && ! $page_exists) {
 			$page_args['href'] = $page_href;
 		}
 		$admin_bar->add_node($page_args);
@@ -566,6 +621,10 @@ class WP_Notes_Admin {
 			throw new Exception($this->i18n->t('missing_screen'));
 		}
 
+		if ('screen' === $scope && ! $note && ! $this->can_create_screen_note_for_request($screen_id, $page_url)) {
+			throw new Exception($this->i18n->t('screen_note_page_only'));
+		}
+
 		return array(
 			'id'         => $note ? $note['id'] : 0,
 			'scope'      => $scope,
@@ -588,6 +647,10 @@ class WP_Notes_Admin {
 
 		if ('screen' === $scope && '' === $screen_id) {
 			return new WP_Error('missing_screen', $this->i18n->t('missing_screen'));
+		}
+
+		if ('screen' === $scope && ! $this->can_create_screen_note_for_request($screen_id, $page_url)) {
+			return new WP_Error('screen_note_page_only', $this->i18n->t('screen_note_page_only'));
 		}
 
 		if (! $existing) {

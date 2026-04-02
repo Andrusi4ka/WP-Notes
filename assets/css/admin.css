@@ -518,10 +518,6 @@
 	white-space: nowrap;
 }
 
-.wp-notes-table__row[class*="wp-notes-theme--"] {
-	background: var(--wp-notes-theme-bg, #f9f1db);
-}
-
 .wp-notes-table__row td:first-child {
 	display: flex;
 	align-items: center;
