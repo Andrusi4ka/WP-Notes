@@ -1,0 +1,23 @@
+{
+  "name": "relevant-as/wp-notes",
+  "description": "WordPress admin notes plugin with screen and global notes.",
+  "type": "wordpress-plugin",
+  "license": "proprietary",
+  "scripts": {
+    "lint:php": [
+      "php -l wp-notes.php",
+      "php -l uninstall.php",
+      "php -l includes/class-wp-notes-admin.php",
+      "php -l includes/class-wp-notes-context.php",
+      "php -l includes/class-wp-notes-i18n.php",
+      "php -l includes/class-wp-notes-permissions.php",
+      "php -l includes/class-wp-notes-plugin.php",
+      "php -l includes/class-wp-notes-renderer.php",
+      "php -l includes/class-wp-notes-repository.php",
+      "php tests/smoke.php"
+    ],
+    "test": [
+      "@lint:php"
+    ]
+  }
+}
