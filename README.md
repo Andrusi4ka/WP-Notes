@@ -10,19 +10,19 @@ Insert screenshots in the sections below as needed.
 
 ### Info Page
 
-![screen](./assets/img/screens/screen-5.png)
+![screen](./screens/screen-5.png)
 
 ### Note Display In Admin
-![screen](./assets/img/screens/screen-3.png)
-![screen](./assets/img/screens/screen-4.png)
+![screen](./screens/screen-3.png)
+![screen](./screens/screen-4.png)
 
 ### Note Editor Modal
 
-![screen](./assets/img/screens/screen-1.png)
+![screen](./screens/screen-1.png)
 
 ### All Notes Page
 
-![screen](./assets/img/screens/screen-6.png)
+![screen](./screens/screen-6.png)
 
 ## Main Capabilities
 

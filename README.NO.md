@@ -10,19 +10,19 @@ Sett inn skjermbilder i seksjonene under ved behov.
 
 ### Info-side
 
-![screen](./assets/img/screens/screen-5.png)
+![screen](./screens/screen-5.png)
 
 ### Visning av notat i admin
-![screen](./assets/img/screens/screen-3.png)
-![screen](./assets/img/screens/screen-4.png)
+![screen](./screens/screen-3.png)
+![screen](./screens/screen-4.png)
 
 ### Redigeringsmodal
 
-![screen](./assets/img/screens/screen-1.png)
+![screen](./screens/screen-1.png)
 
 ### Alle notater-side
 
-![screen](./assets/img/screens/screen-6.png)
+![screen](./screens/screen-6.png)
 
 ## Hovedfunksjoner
 

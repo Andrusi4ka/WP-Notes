@@ -1,9 +1,0 @@
-{
-  "name": "wp-notes",
-  "private": true,
-  "version": "2.0.15",
-  "scripts": {
-    "lint:js": "node --check assets/js/admin.js && node --check assets/js/admin-core.js && node --check assets/js/admin-code.js && node --check assets/js/admin-editor.js && node --check assets/js/admin-modal.js && node --check assets/js/admin-notes.js",
-    "test": "npm run lint:js"
-  }
-}
